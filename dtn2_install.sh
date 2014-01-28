@@ -1,34 +1,50 @@
 #!/bin/bash
+# This script download and install dtn2 + all the requirements.
 
-test "$#" -eq 4 && F="$4"
-
-function baz64 {
-echo $1 | base64 -d && echo;
+msg(){
+  echo -e "\033[1;36m   [inf] $1\033[0m"
 }
-
-function md5 {
-while read l; do
-  test  "$1" = $(md5pass "$l" "$2" | cut -d $ -f 4) && echo "$l" && exit
-done < $F
-echo "404"
+err(){
+  echo -e "\033[1;31m   [err] $1\033[0m"
 }
+#TODO make a function for all these test, using kill $$ might work
 
-function sha {
-while read l; do
-  test  "$1" = $(sha1pass "$l" "$2" | cut -d $ -f 4) && echo "$l" && exit
-done < $F
-echo "404"
-}
+msg "Update && upgrade"
+apt-get update -y && apt-get upgrade -y
 
-function apr {
-while read l; do
-  test  "$1" = $(openssl passwd -apr1 -salt "$2" "$l" | cut -d $ -f 4) && echo "$l" && exit
-done < $F
-echo "404"
-}
+msg "Install required packages"
+apt-get install -y linux-headers-3.2.0.4-686-pae mercurial tcl8.5-dev libevent-pthreads-2.0-5 make libxmlsec1-dev gcc g++
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+msg "If you run this script on mini-10 dell install the package *broadcom-sta-dkms* to get Wi-Fi card working"
 
-test "$#" -eq 1 && baz64 $1 && exit
-test "$#" -eq 4 -a "$1" = "md5" && md5 $2 $3 && exit
-test "$#" -eq 4 -a "$1" = "sha" && sha $2 $3 && exit
-test "$#" -eq 4 -a "$1" = "apr" && apr $2 $3 && exit
-echo "Are you sure to know how to use it?"
+msg "cd-ing to /root"
+cd /root
+
+msg "dl-ing oasys and dtn sources"
+hg clone http://hg.code.sf.net/p/dtn/oasys oasys
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+hg clone http://hg.code.sf.net/p/dtn/DTN2 dtn
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+
+cd oasys
+msg "Configuring oasys"
+./configure --without-db
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+msg "Making oasys"
+make
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+
+cd ../
+mv oasys/ -t dtn
+cd dtn
+msg "Configuring dtn"
+#edp: external decision plane; ecl: external convergence layer
+./configure -C --disable-ecl --disable-edp --without-db
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+msg "Making dtn"
+make
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+msg "Make installing oasys"
+make install
+test "$?" -eq 0 && (msg "OK" || err "Something went wrong" && exit)
+
